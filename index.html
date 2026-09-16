@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IRA Withdrawal Tax Calculator</title>
+
+<!-- Home-screen / PWA. iOS reads these from the live DOM when a person taps
+     "Add to Home Screen", so the profile script below can rewrite the title
+     and icon before that happens. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tax Calc">
+<meta name="theme-color" content="#1C3446">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="./roots-mark.png">
+<link id="touchicon" rel="apple-touch-icon" href="./roots-appleicon.png">
+<link id="manifest" rel="manifest" href="">
+
+<!-- Roots Financial type: Fraunces (display serif), Archivo (sans), IBM Plex Mono (figures) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    /* Roots Financial palette (light) */
+    --paper:#F1ECE1; --card:#FBF8F1; --pine:#1C3446; --pine-deep:#14212C;
+    --canopy:#2C4C62; --bark:#A6462A; --bark-soft:#B9573A; --root:#A9833F;
+    --pos:#2F7D57; --ink:#20242B; --sub:#5A6875; --line:#D8D0BF;
+    --line-soft:#E4DCCC; --field:#FFFFFF;
+    /* semantic mappings used through the page */
+    --bg:var(--paper); --panel:var(--card); --muted:var(--sub);
+    --accent:var(--bark); --accent-ink:#ffffff; --owe:var(--bark); --keep:var(--pos);
+    --soft:var(--line-soft); --shadow:rgba(20,33,44,.09);
+    --serif:"Fraunces",Georgia,"Times New Roman",serif;
+    --sans:"Archivo",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#101C26; --card:#16242F; --pine:#0E1A24; --pine-deep:#0A121A;
+      --canopy:#244056; --bark:#D07A54; --bark-soft:#DA8A67; --root:#C6A25E;
+      --pos:#63B487; --ink:#EAE6DA; --sub:#94A2AE; --line:#26333F;
+      --line-soft:#1F2A34; --field:#0C161F; --accent-ink:#141013;
+      --shadow:rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#101C26; --card:#16242F; --pine:#0E1A24; --pine-deep:#0A121A;
+    --canopy:#244056; --bark:#D07A54; --bark-soft:#DA8A67; --root:#C6A25E;
+    --pos:#63B487; --ink:#EAE6DA; --sub:#94A2AE; --line:#26333F;
+    --line-soft:#1F2A34; --field:#0C161F; --accent-ink:#141013;
+    --shadow:rgba(0,0,0,.4);
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:16px/1.55 var(--sans);
+    -webkit-text-size-adjust:100%; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:20px 18px 44px}
+
+  /* brand lockup, matched to the Roots Financial nav */
+  header.hdr{margin:4px 0 22px}
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding-bottom:18px; border-bottom:1px solid var(--line)}
+  .brand-lockup{display:flex; align-items:center; gap:12px; text-decoration:none}
+  .brand-lockup img{width:42px; height:42px; flex-shrink:0}
+  .wm{display:flex; align-items:center; line-height:1}
+  .wm .tag{font:500 12px/1.3 var(--mono); letter-spacing:.22em; text-transform:uppercase; color:var(--sub)}
+
+  .gear{flex:none; background:var(--card); border:1px solid var(--line); color:#fff;
+    width:44px; height:44px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:border-color .15s ease, transform .15s ease}
+  .gear:hover{border-color:#2C4C62; transform:translateY(-1px)}
+  .gear:active{transform:translateY(0)}
+  .anchor-badge{width:28px; height:28px; border-radius:50%; background:#1C3446;
+    display:flex; align-items:center; justify-content:center}
+  .anchor-badge svg{width:17px; height:17px}
+
+  .intro{margin-top:22px}
+  .eyebrow{font:500 11px/1 var(--mono); letter-spacing:.24em; text-transform:uppercase; color:var(--root)}
+  h1{font-family:var(--serif); font-size:clamp(26px,5vw,34px); line-height:1.1; margin:12px 0 6px; font-weight:600; letter-spacing:-.01em; color:var(--ink)}
+  .sub{color:var(--sub); font-size:15.5px; margin:0; max-width:52ch}
+
+  /* Lynne's simple face */
+  .simple{background:var(--card); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 1px 2px var(--shadow); padding:24px 22px 26px; margin:20px 0}
+  .simple-lab{display:block; font-size:17px; font-weight:500; margin-bottom:14px; color:var(--ink)}
+  .simple-inwrap{display:flex; align-items:center; gap:6px; border:1px solid var(--line);
+    border-radius:8px; padding:12px 16px; background:var(--field)}
+  .simple-inwrap:focus-within{border-color:var(--bark)}
+  .simple-cur{font-family:var(--serif); font-size:34px; font-weight:500; color:var(--sub)}
+  .simple-in{flex:1; min-width:0; border:0; background:transparent; outline:none; color:var(--ink);
+    font-family:var(--serif); font-size:46px; font-weight:600; letter-spacing:-.01em; padding:0}
+  .calc{width:100%; margin-top:16px; padding:16px; font-size:16px; font-weight:600; font-family:var(--sans);
+    letter-spacing:.02em; color:#fff; background:var(--bark); border:0; border-radius:6px; cursor:pointer;
+    transition:background .15s ease, transform .15s ease}
+  .calc:hover{background:var(--bark-soft); transform:translateY(-1px)}
+  .calc:active{transform:translateY(0)}
+  .simple-out{margin-top:24px; text-align:center; border-top:1px solid var(--line); padding-top:22px}
+  .so-lab{font:500 11px/1 var(--mono); letter-spacing:.22em; text-transform:uppercase; color:var(--sub)}
+  .so-tax{font-family:var(--serif); font-size:56px; font-weight:600; letter-spacing:-.01em; color:var(--owe); line-height:1.05; margin:10px 0 6px}
+  .so-keep{font-size:16px; color:var(--sub)}
+  .so-keep b{color:var(--keep); font-weight:600}
+
+  .cards{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin:22px 0}
+  @media (max-width:760px){ .cards{grid-template-columns:1fr} }
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:10px;
+    padding:18px 16px 16px; box-shadow:0 1px 2px var(--shadow); display:flex; flex-direction:column;
+  }
+  .card .lab{font:500 10px/1 var(--mono); letter-spacing:.2em; text-transform:uppercase; color:var(--sub); margin-bottom:10px}
+  .amtline{display:flex; align-items:baseline; gap:3px; border-bottom:1px solid var(--line); padding-bottom:8px; cursor:text}
+  .amtline .cur{font-family:var(--serif); font-size:24px; font-weight:500; color:var(--sub)}
+  .amt{
+    font-family:var(--serif); font-size:34px; font-weight:600; letter-spacing:-.01em; color:var(--ink);
+    border:0; background:transparent; width:100%; padding:0; outline:none;
+  }
+  .amt:focus{color:var(--bark)}
+  .taphint{font-size:11px; color:var(--sub); margin:5px 0 12px}
+
+  .headline{margin:6px 0 2px}
+  .headline .row{display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:5px 0}
+  .headline .big{font-family:var(--serif); font-size:24px; font-weight:600; letter-spacing:-.01em}
+  .owe .big{color:var(--owe)}
+  .keep .big{color:var(--keep)}
+  .headline .t{color:var(--sub); font-size:14px}
+  .effline{margin-top:10px; font-size:13px; color:var(--sub)}
+  .effline b{color:var(--ink); font-weight:600}
+
+  details.detail{margin-top:14px; border-top:1px solid var(--line); padding-top:10px}
+  details.detail>summary{cursor:pointer; color:var(--bark); font-size:12px; font-weight:600; letter-spacing:.02em; list-style:none}
+  details.detail>summary::-webkit-details-marker{display:none}
+  details.detail>summary::after{content:" +"}
+  details.detail[open]>summary::after{content:" \2013"}
+  .brk{font-family:var(--mono); font-size:12.5px; margin-top:12px}
+  .brk .r{display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px dotted var(--line)}
+  .brk .r:last-child{border-bottom:0}
+  .brk .r.tot{font-weight:500; border-top:1px solid var(--line); margin-top:2px; padding-top:7px; color:var(--ink)}
+  .brk .r span:first-child{font-family:var(--sans); color:var(--sub)}
+  .brk .r span:last-child{font-variant-numeric:tabular-nums; color:var(--ink)}
+  .tip{margin-top:12px; background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:11px 13px; font-size:13px; color:var(--ink)}
+  .tip b{color:var(--bark); font-weight:600}
+
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:0 1px 2px var(--shadow); margin:16px 0}
+  .panel>summary{cursor:pointer; padding:15px 16px; font-weight:600; list-style:none; display:flex; justify-content:space-between; align-items:center; color:var(--ink)}
+  .panel>summary::-webkit-details-marker{display:none}
+  .panel>summary .chev{font:500 11px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--sub)}
+  .panel[open]>summary .chev::after{content:"Hide"}
+  .panel:not([open])>summary .chev::after{content:"Edit"}
+  .panel .body{padding:0 16px 18px}
+
+  .field{margin:14px 0}
+  .field label{display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--ink)}
+  .field .hint{font-weight:400; color:var(--sub); font-size:12px}
+  .field input, .field select{
+    width:100%; padding:11px 12px; font-size:16px; font-family:var(--sans);
+    border:1px solid var(--line); border-radius:6px; background:var(--field); color:var(--ink);
+  }
+  .field input:focus, .field select:focus{outline:none; border-color:var(--bark); box-shadow:0 0 0 2px color-mix(in srgb, var(--bark) 22%, transparent)}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media (max-width:520px){ .grid2{grid-template-columns:1fr} }
+  .check{display:flex; align-items:center; gap:8px; font-size:14px; margin:10px 0}
+  .check input{width:auto; accent-color:var(--bark)}
+
+  .how{background:var(--card); border:1px solid var(--line); border-radius:10px; box-shadow:0 1px 2px var(--shadow); margin:16px 0}
+  .how>summary{cursor:pointer; padding:15px 16px; font-weight:600; color:var(--bark); list-style:none}
+  .how>summary::-webkit-details-marker{display:none}
+  .how .body{padding:0 16px 18px; font-size:14.5px; color:var(--ink)}
+  .how .body p{margin:10px 0}
+  .how .body h3{font-family:var(--serif); font-size:15px; font-weight:600; margin:16px 0 4px}
+  .how .body ul{margin:8px 0; padding-left:20px}
+  .how .body li{margin:5px 0; color:var(--sub)}
+  .ex{background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:12px 14px; font-size:13.5px; margin:8px 0; line-height:1.6}
+
+  footer{margin-top:28px; text-align:center; color:var(--sub); font-size:12.5px; line-height:1.7}
+  footer .warn{font-weight:600; color:var(--ink)}
+  footer .fb{font:500 10px/1.5 var(--mono); letter-spacing:.18em; text-transform:uppercase; margin-top:8px}
+  a{color:var(--bark)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hdr">
+    <div class="topbar">
+      <span class="brand-lockup" aria-label="Roots Financial">
+        <img src="./roots-mark.png" alt="Roots Financial" width="44" height="44">
+        <span class="wm"><span class="tag">Generational Prosperity</span></span>
+      </span>
+      <button id="gear" class="gear" type="button" aria-label="Settings" title="Settings" hidden>
+        <span class="anchor-badge">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="24" cy="8" r="3.4"/>
+            <line x1="24" y1="11.4" x2="24" y2="41"/>
+            <line x1="15" y1="17" x2="33" y2="17"/>
+            <path d="M8 27 C 8 35.5, 15.5 41, 24 41 C 32.5 41, 40 35.5, 40 27"/>
+            <path d="M8 27 l -4 1.4 M8 27 l 2.4 4.2"/>
+            <path d="M40 27 l 4 1.4 M40 27 l -2.4 4.2"/>
+          </svg>
+        </span>
+      </button>
+    </div>
+    <div class="intro">
+      <div class="eyebrow" id="kicker">Tax Estimator</div>
+      <h1 id="title">What will it cost me?</h1>
+      <p class="sub" id="subtitle">Type in an amount from your IRA and see what goes to taxes and what you keep.</p>
+    </div>
+  </header>
+
+  <!-- Lynne's face: one box, one button, one number. -->
+  <section class="simple" id="simple" hidden>
+    <label class="simple-lab" for="simpleAmt">How much do you want to take out?</label>
+    <div class="simple-inwrap">
+      <span class="simple-cur">$</span>
+      <input id="simpleAmt" class="simple-in" inputmode="numeric" placeholder="0" autocomplete="off">
+    </div>
+    <button id="calcBtn" class="calc" type="button">Calculate</button>
+    <div id="simpleOut" class="simple-out" hidden>
+      <div class="so-lab">Taxes on it</div>
+      <div class="so-tax" id="soTax">$0</div>
+      <div class="so-keep" id="soKeep"></div>
+    </div>
+  </section>
+
+  <section class="cards" id="cards"><!-- cards injected --></section>
+
+  <details class="panel" id="about">
+    <summary>About me <span class="chev"></span></summary>
+    <div class="body">
+      <div class="grid2">
+        <div class="field">
+          <label for="filing">Filing status</label>
+          <select id="filing">
+            <option value="single">Single</option>
+            <option value="mfj">Married filing jointly</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="age">Your age</label>
+          <input id="age" inputmode="numeric" placeholder="e.g. 66">
+        </div>
+      </div>
+
+      <div class="check" id="spouse65wrap" hidden>
+        <input type="checkbox" id="spouse65">
+        <label for="spouse65" style="margin:0;font-weight:400">Spouse is also 65 or older</label>
+      </div>
+
+      <div class="field">
+        <label for="income">Other taxable income this year
+          <span class="hint">Pension, the taxable part of Social Security, any wages, interest, and any RMD you already took. One number, before this withdrawal.</span>
+        </label>
+        <input id="income" inputmode="numeric" placeholder="e.g. 30,000">
+      </div>
+
+      <div class="grid2">
+        <div class="field">
+          <label for="state">State</label>
+          <select id="state">
+            <option value="UT">Utah</option>
+            <option value="NONE">No state income tax</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="year">Tax year</label>
+          <select id="year"><option value="2026">2026</option></select>
+        </div>
+      </div>
+      <p class="sub" style="font-size:12.5px">Saved on this device only. Nothing you type here leaves your phone or browser.</p>
+    </div>
+  </details>
+
+  <details class="how">
+    <summary>How this is figured</summary>
+    <div class="body">
+      <p>Your Traditional IRA was funded with money that was never taxed, so every dollar you take out counts as ordinary income for the year. That withdrawal stacks on top of your other income, so the tax on it depends on which bracket the last dollars land in.</p>
+      <p>The math here does exactly that. It works out your tax without the withdrawal, then your tax with it, and the difference is the federal tax the withdrawal actually caused. It adds your state tax, and a 10% early-withdrawal penalty only if you are under 59 and a half.</p>
+      <div class="ex" id="worked"></div>
+      <h3>What this leaves out, on purpose</h3>
+      <p>This is an estimate to help you plan. It is not tax advice or a tax return. The real number can be a little higher or lower because this simple version does not model:</p>
+      <ul>
+        <li>The way extra income can make more of your Social Security taxable (the "tax torpedo").</li>
+        <li>Utah's retirement and Social Security tax credit, which would lower the Utah figure shown.</li>
+        <li>Medicare premium surcharges (IRMAA) at higher income.</li>
+        <li>Any other credits or deduction phaseouts.</li>
+      </ul>
+      <p class="sub" style="font-size:12.5px" id="cfgnote"></p>
+    </div>
+  </details>
+
+  <footer>
+    <p class="warn">Estimate only. Confirm with a tax professional before making a withdrawal.</p>
+    <p class="fb" id="foot-brand">Roots Financial &middot; Generational Prosperity</p>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------------------------------------------------------------------
+   Tax config. Stored by year and filing status so it is updated once a year,
+   never hardcoded in the logic. All 2026 figures verified against IRS
+   Rev. Proc. 2025-32 (OBBBA) and Utah SB 60 on 2026-09-05.
+   Brackets are [lower threshold, marginal rate].
+--------------------------------------------------------------------------- */
+var TAX = {
+  "2026": {
+    verified: "2026 figures per IRS Rev. Proc. 2025-32 and Utah SB 60. Verify again each January.",
+    single: {
+      label: "Single",
+      brackets: [[0,.10],[12400,.12],[50400,.22],[105700,.24],[201775,.32],[256225,.35],[640600,.37]],
+      std: 16100, add65: 2050, bonus: 6000, bonusStart: 75000, bonusRate: .06
+    },
+    mfj: {
+      label: "Married filing jointly",
+      brackets: [[0,.10],[24800,.12],[100800,.22],[211400,.24],[403550,.32],[512450,.35],[768700,.37]],
+      std: 32200, add65: 1650, bonus: 6000, bonusStart: 150000, bonusRate: .06
+    }
+  }
+};
+var STATES = { UT:{name:"Utah", rate:.0445}, NONE:{name:"No state tax", rate:0} };
+
+/* --------------------------- the engine ---------------------------------- */
+function fedTax(taxable, brackets){
+  if(taxable <= 0) return 0;
+  var tax = 0;
+  for(var i=0;i<brackets.length;i++){
+    var lo = brackets[i][0], rate = brackets[i][1];
+    var hi = (i+1 < brackets.length) ? brackets[i+1][0] : Infinity;
+    if(taxable > lo) tax += (Math.min(taxable,hi) - lo) * rate;
+    else break;
+  }
+  return tax;
+}
+function marginalRate(taxable, brackets){
+  var rate = brackets[0][1];
+  for(var i=0;i<brackets.length;i++){ if(taxable > brackets[i][0]) rate = brackets[i][1]; }
+  return rate;
+}
+function totalDeductions(cfg, otherIncome, filing, is65, spouse65){
+  var d = cfg.std, count65 = 0;
+  if(filing === "mfj"){ count65 = (is65?1:0) + (spouse65?1:0); }
+  else { count65 = is65 ? 1 : 0; }
+  d += cfg.add65 * count65;
+  if(count65 > 0){
+    var bonus = cfg.bonus * count65;
+    bonus -= cfg.bonusRate * Math.max(0, otherIncome - cfg.bonusStart);
+    d += Math.max(0, bonus);
+  }
+  return d;
+}
+/* The full computation for one withdrawal amount. */
+function compute(inp){
+  var yr = TAX[inp.year], cfg = yr[inp.filing];
+  var st = STATES[inp.state] || STATES.NONE;
+  var is65 = inp.age !== null && inp.age >= 65;
+  var under59 = inp.age !== null && inp.age < 59.5;
+
+  var ded = totalDeductions(cfg, inp.income, inp.filing, is65, inp.spouse65);
+  /* Deductions apply against the combined income, so any part of the deduction
+     her other income does not use up still shelters the withdrawal. When her
+     other income already exceeds her deductions this reduces to the spec's
+     baseline-plus-withdrawal form and matches the worked example exactly. */
+  var taxableWithout = Math.max(0, inp.income - ded);
+  var taxableWith = Math.max(0, inp.income + inp.amount - ded);
+  var fedBase = fedTax(taxableWithout, cfg.brackets);
+  var fedWith = fedTax(taxableWith, cfg.brackets);
+  var fed = Math.max(0, fedWith - fedBase);
+  var penalty = under59 ? 0.10 * inp.amount : 0;
+  var state = st.rate * inp.amount;
+  var total = fed + penalty + state;
+  var kept = inp.amount - total;
+  var eff = inp.amount > 0 ? total / inp.amount : 0;
+  var marg = marginalRate(taxableWith, cfg.brackets);
+
+  return {
+    amount: inp.amount, fed: fed, penalty: penalty, state: state, stateName: st.name,
+    total: total, kept: kept, eff: eff, marginal: marg, under59: under59,
+    withhold: Math.ceil(eff * 100)
+  };
+}
+
+/* --------------------------- formatting ---------------------------------- */
+function money(n){ return "$" + Math.round(n).toLocaleString("en-US"); }
+function pct(x){ return Math.round(x*100) + "%"; }
+function parseNum(s){ var n = parseFloat(String(s).replace(/[^0-9.]/g,"")); return isNaN(n) ? 0 : n; }
+
+/* --------------------------- profile / branding -------------------------- */
+var params = new URLSearchParams(location.search);
+var profile = (params.get("for") || "").toLowerCase();
+var isLynne = profile === "lynne";
+var STORE_KEY = "ira-calc:v1:" + (profile || "default");
+
+if(isLynne){
+  document.getElementById("kicker").textContent = "For Lynne and Lyle";
+  document.getElementById("title").textContent = "Lynne's Tax Estimator";
+  document.getElementById("subtitle").textContent =
+    "Enter an amount from your IRA and tap Calculate.";
+  document.title = "Tax Estimator";
+  var mt = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+  if(mt) mt.setAttribute("content","Tax Estimator");
+  document.getElementById("foot-brand").textContent = "Made for you by Roots Financial";
+}
+
+/* --------------------------- state / persistence ------------------------- */
+var DEFAULTS = { filing:"single", age: isLynne ? "76" : "", income: isLynne ? "0" : "",
+                 state:"UT", year:"2026", spouse65:false, amounts:[10000,25000,50000] };
+var S = load();
+
+function load(){
+  var s = Object.assign({}, DEFAULTS);
+  try{
+    var raw = localStorage.getItem(STORE_KEY);
+    if(raw){ var o = JSON.parse(raw); s = Object.assign(s, o); }
+  }catch(e){}
+  if(!Array.isArray(s.amounts) || s.amounts.length !== 3) s.amounts = DEFAULTS.amounts.slice();
+  return s;
+}
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(S)); }catch(e){} }
+
+/* --------------------------- inputs wiring ------------------------------- */
+var elFiling = document.getElementById("filing");
+var elAge = document.getElementById("age");
+var elIncome = document.getElementById("income");
+var elState = document.getElementById("state");
+var elYear = document.getElementById("year");
+var elSpouse = document.getElementById("spouse65");
+var elSpouseWrap = document.getElementById("spouse65wrap");
+var elAbout = document.getElementById("about");
+
+elFiling.value = S.filing;
+elAge.value = S.age;
+elIncome.value = S.income ? Number(S.income).toLocaleString("en-US") : "";
+elState.value = S.state;
+elYear.value = S.year;
+elSpouse.checked = !!S.spouse65;
+
+/* Open the About panel the first time (nothing entered yet). */
+if(!S.income && S.age === "") elAbout.open = true;
+
+function syncSpouseVisibility(){ elSpouseWrap.hidden = (elFiling.value !== "mfj"); }
+syncSpouseVisibility();
+
+function readInputs(){
+  S.filing = elFiling.value;
+  S.age = elAge.value.replace(/[^0-9.]/g,"");
+  S.income = String(parseNum(elIncome.value));
+  S.state = elState.value;
+  S.year = elYear.value;
+  S.spouse65 = elSpouse.checked;
+  save();
+  render();
+  if(isLynne) refreshSimpleIfShown();
+}
+[elFiling, elState, elYear].forEach(function(e){ e.addEventListener("change", function(){ syncSpouseVisibility(); readInputs(); }); });
+[elAge].forEach(function(e){ e.addEventListener("input", readInputs); });
+elSpouse.addEventListener("change", readInputs);
+elIncome.addEventListener("input", readInputs);
+elIncome.addEventListener("blur", function(){
+  var n = parseNum(elIncome.value); elIncome.value = n ? n.toLocaleString("en-US") : "";
+});
+
+/* --------------------------- cards --------------------------------------- */
+var LABELS = ["Amount 1","Amount 2","Amount 3"];
+function buildCards(){
+  var host = document.getElementById("cards"); host.innerHTML = "";
+  S.amounts.forEach(function(amt, i){
+    var c = document.createElement("div"); c.className = "card"; c.dataset.i = i;
+    c.innerHTML =
+      '<div class="lab">'+LABELS[i]+'</div>'+
+      '<div class="amtline"><span class="cur">$</span>'+
+        '<input class="amt" inputmode="numeric" value="'+Number(amt).toLocaleString("en-US")+'"></div>'+
+      '<div class="taphint">Tap to change</div>'+
+      '<div class="headline">'+
+        '<div class="row owe"><span class="t">You would owe about</span><span class="big oweval"></span></div>'+
+        '<div class="row keep"><span class="t">You would keep about</span><span class="big keepval"></span></div>'+
+        '<div class="effline"></div>'+
+      '</div>'+
+      '<details class="detail"><summary>See the breakdown</summary>'+
+        '<div class="brk"></div><div class="tip"></div>'+
+      '</details>';
+    host.appendChild(c);
+
+    var inp = c.querySelector(".amt");
+    inp.addEventListener("focus", function(){ inp.select(); });
+    inp.addEventListener("input", function(){
+      S.amounts[i] = parseNum(inp.value); save(); renderCard(c, i);
+    });
+    inp.addEventListener("blur", function(){
+      inp.value = Number(S.amounts[i]||0).toLocaleString("en-US"); renderCard(c, i);
+    });
+  });
+}
+
+function renderCard(card, i){
+  var inp = {
+    year: elYear.value, filing: elFiling.value, state: elState.value,
+    age: elAge.value === "" ? null : parseNum(elAge.value),
+    income: parseNum(elIncome.value), spouse65: elSpouse.checked,
+    amount: S.amounts[i] || 0
+  };
+  var r = compute(inp);
+  /* Round the tax once, then derive kept from it, so the two headline numbers
+     always add back to the gross for a reader who checks. */
+  var totalR = Math.round(r.total);
+  var keptR = r.amount - totalR;
+  card.querySelector(".oweval").textContent = money(totalR);
+  card.querySelector(".keepval").textContent = money(keptR);
+  card.querySelector(".effline").innerHTML =
+    "That is about <b>"+pct(r.eff)+"</b> of it in taxes. Marginal federal bracket: <b>"+pct(r.marginal)+"</b>.";
+
+  var brk = card.querySelector(".brk");
+  var rows = ""+
+    row("Gross withdrawal", money(r.amount))+
+    row("Federal tax on it", money(r.fed))+
+    (r.penalty>0 ? row("Early-withdrawal penalty (10%)", money(r.penalty)) : "")+
+    row(r.stateName + " tax on it", money(r.state))+
+    row("Total tax", money(totalR), true)+
+    row("Cash you keep", money(keptR), true)+
+    row("Effective tax rate", pct(r.eff))+
+    row("Marginal federal bracket", pct(r.marginal));
+  brk.innerHTML = rows;
+
+  var tip = card.querySelector(".tip");
+  if(r.amount > 0){
+    tip.innerHTML = "To avoid a surprise at tax time, you could ask Schwab to withhold about <b>"+
+      r.withhold+"%</b> when you take this out.";
+    tip.style.display = "";
+  } else { tip.style.display = "none"; }
+}
+function row(k, v, strong){
+  return '<div class="r'+(strong?' tot':'')+'"><span>'+k+'</span><span>'+v+'</span></div>';
+}
+
+function render(){
+  var cards = document.querySelectorAll(".card");
+  for(var i=0;i<cards.length;i++) renderCard(cards[i], i);
+}
+
+/* --------------------------- worked example / config note ---------------- */
+document.getElementById("worked").innerHTML =
+  "<b>Worked example.</b> Single, age 66, other income $30,000, taking out $10,000 in Utah. "+
+  "Deductions of $24,150 leave $5,850 taxable, so tax without the withdrawal is $585. "+
+  "Add the $10,000 and taxable income is $15,850, tax $1,654. The withdrawal caused "+
+  "$1,069 in federal tax, plus $445 Utah tax and no penalty. Total about $1,514, "+
+  "keep about $8,486, roughly 15%.";
+document.getElementById("cfgnote").textContent = TAX[S.year] ? TAX[S.year].verified : "";
+
+/* --------------------------- home-screen manifest ------------------------ */
+/* The home-screen icon is the Roots Financial mark, shipped as a real PNG and
+   referenced by the static apple-touch-icon link in the head. Android reads the
+   manifest below, built at runtime so start_url carries the profile. */
+function makeManifest(){
+  try{
+    var name = isLynne ? "Tax Estimator" : "Roots Tax Calculator";
+    var icon = new URL("./roots-appleicon.png", location.origin).href;
+    var m = {
+      name: name, short_name: name, display: "standalone",
+      background_color: "#F1ECE1", theme_color: "#1C3446",
+      start_url: location.pathname + location.search, scope: location.pathname,
+      icons: [
+        {src:icon, sizes:"180x180", type:"image/png"},
+        {src:icon, sizes:"192x192", type:"image/png"},
+        {src:icon, sizes:"512x512", type:"image/png"}
+      ]
+    };
+    var blob = new Blob([JSON.stringify(m)], {type:"application/manifest+json"});
+    document.getElementById("manifest").setAttribute("href", URL.createObjectURL(blob));
+  }catch(e){}
+}
+
+/* --------------------------- simple face (Lynne) ------------------------- */
+function computeSimple(){
+  var amount = parseNum(document.getElementById("simpleAmt").value);
+  var r = compute({
+    year: elYear.value, filing: elFiling.value, state: elState.value,
+    age: elAge.value === "" ? null : parseNum(elAge.value),
+    income: parseNum(elIncome.value), spouse65: elSpouse.checked, amount: amount
+  });
+  var totalR = Math.round(r.total);
+  document.getElementById("soTax").textContent = money(totalR);
+  document.getElementById("soKeep").innerHTML = amount > 0
+    ? "You would keep about <b>" + money(amount - totalR) + "</b> of your " + money(amount) + "."
+    : "Enter an amount, then tap Calculate.";
+  document.getElementById("simpleOut").hidden = false;
+}
+function refreshSimpleIfShown(){
+  if(!document.getElementById("simpleOut").hidden) computeSimple();
+}
+function setupSimple(){
+  document.getElementById("cards").hidden = true;
+  document.getElementById("simple").hidden = false;
+  document.getElementById("gear").hidden = false;
+
+  var about = document.getElementById("about");
+  var sum = about.querySelector("summary");
+  if(sum) sum.style.display = "none";           /* reached through the gear instead */
+  document.getElementById("gear").addEventListener("click", function(){
+    about.open = !about.open;
+    if(about.open) about.scrollIntoView({behavior:"smooth", block:"start"});
+  });
+
+  var amtEl = document.getElementById("simpleAmt");
+  document.getElementById("calcBtn").addEventListener("click", computeSimple);
+  amtEl.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); amtEl.blur(); computeSimple(); } });
+  amtEl.addEventListener("blur", function(){
+    var n = parseNum(amtEl.value); amtEl.value = n ? n.toLocaleString("en-US") : "";
+  });
+}
+
+/* --------------------------- boot ---------------------------------------- */
+if(isLynne){ setupSimple(); }
+else { buildCards(); render(); }
+makeManifest();
+
+})();
+</script>
+</body>
+</html>
